@@ -1,19 +1,19 @@
-# Hyprland QMK Window Notifier
+# QMK Window Notifier
 
-A specialized Rust application that detects active window changes in Hyprland and sends this information to QMK keyboards, enabling dynamic layer switching and command execution based on the active application.
+A specialized Rust application that detects active window changes in supported environments (Hyprland and macOS) and sends this information to QMK keyboards, enabling dynamic layer switching and command execution based on the active application.
 
 ## Overview
 
-Hyprland QMK Window Notifier bridges the gap between Hyprland (a dynamic tiling Wayland compositor) and QMK-powered keyboards. It monitors window focus changes and transmits application class and title information to your keyboard, enabling context-aware layer switching and feature toggling.
+QMK Window Notifier bridges the gap between supported environments (Hyprland and macOS) and QMK-powered keyboards. It monitors window focus changes and transmits application class and title information to your keyboard, enabling context-aware layer switching and feature toggling.
 
 This tool is part of a broader ecosystem I've created:
 - **[qmk-notifier](https://github.com/dabstractor/qmk-notifier)**: QMK module that receives commands and handles layer/feature toggling on your keyboard
 - **[qmk_notifier](https://github.com/dabstractor/qmk_notifier)**: Desktop application that sends commands to your keyboard via Raw HID
-- **hyprland-qmk-window-notifier** (this tool): Wayland application that detects window changes in Hyprland
+- **qmk-window-notifier** (this tool): Application that detects window changes in supported environments
 
 ## Features
 
-- Seamless integration with Hyprland's event system
+- Seamless integration with Hyprland's event system and macOS
 - Real-time window focus change detection
 - Automatic transmission of application class and window title to QMK keyboards
 - Minimal resource footprint
@@ -25,12 +25,13 @@ This tool is part of a broader ecosystem I've created:
 
 ```bash
 # Clone the repository
-git clone https://github.com/dabstractor/hyprland-qmk-window-notifier.git
-cd hyprland-qmk-window-notifier
+git clone https://github.com/dabstractor/qmk-window-notifier.git
+cd qmk-window-notifier
 
 # Build the project
 cargo build --release
 
+# The binary will be available at target/release/qmk-window-notifier
 ```
 The binary will be available at target/release/qmk-window-notifier
 
@@ -40,7 +41,7 @@ The binary will be available at target/release/qmk-window-notifier
 
 ## Usage
 
-Simply run the application while Hyprland is active:
+Simply run the application while a supported environment is active:
 
 ```bash
 # Run the application
@@ -48,7 +49,7 @@ qmk-window-notifier
 ```
 
 The application automatically:
-1. Verifies it's running within Hyprland
+1. Verifies it's running within a supported environment
 2. Sets up event listeners for window focus changes
 3. Captures application class and title information
 4. Formats and sends this data to your QMK keyboard using the qmk_notifier library
@@ -65,9 +66,9 @@ When a window focus change is detected, this application formats the data as:
 ## Technical Details
 
 - Written in Rust for performance and reliability
-- Uses the Hyprland crate to interact with Hyprland's IPC
-- Utilizes Hyprland's event system to detect window changes
-- Handles error conditions gracefully (e.g., when Hyprland is not running)
+- Uses the Hyprland crate to interact with Hyprland's IPC (if running on Wayland)
+- Utilizes Hyprland's event system to detect window changes (if running on Wayland)
+- Handles error conditions gracefully (e.g., when a supported environment is not running)
 - Minimal overhead and resource usage
 
 ## Automatic Startup
@@ -76,7 +77,7 @@ To run this utility automatically when Hyprland starts, add the following to you
 
 ```bash
 # ~/.config/hypr/hyprland.conf
-exec-once = hyprland-qmk-window-notifier
+exec-once = qmk-window-notifier
 ```
 
 ## Example Use Cases
@@ -93,3 +94,4 @@ Contributions are welcome! Feel free to submit issues or pull requests on GitHub
 ## License
 
 [MIT License](LICENSE)
+
