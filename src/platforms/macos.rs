@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 #![cfg(target_os = "macos")]
 use crate::core::notifier;
 use crate::core::types::WindowInfo;
@@ -10,7 +11,7 @@ use core_foundation::{
     array::CFArray,
     base::CFRange,
     base::{CFRelease, TCFType},
-    dictionary::{CFDictionary, CFDictionaryGetCount, CFDictionaryRef},
+    dictionary::{CFDictionary, CFDictionaryRef},
     runloop::{CFRunLoop, CFRunLoopRun},
     string::CFString,
 };
@@ -19,11 +20,7 @@ use core_foundation::{
 use core_graphics::window::{kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo};
 
 #[cfg(target_os = "macos")]
-use objc::{
-    class, msg_send,
-    runtime::{Object, Sel},
-    sel, sel_impl,
-};
+use objc::{class, msg_send, runtime::Object, sel, sel_impl};
 
 #[cfg(target_os = "macos")]
 use dispatch::Queue;
@@ -34,7 +31,7 @@ extern "C" {
     static NSWorkspaceDidActivateApplicationNotification: *const Object;
     static kCGWindowOwnerName: *const c_void;
     static kCGWindowName: *const c_void;
-    static kCGWindowNumber: *const c_void;
+    // static kCGWindowNumber: *const c_void;
 
     // MacOS Block_copy function
     fn _Block_copy(block: *const c_void) -> *mut c_void;
@@ -46,17 +43,23 @@ extern "C" {
     /// Returns true if the app already has screen recording permission (or if running on an older OS).
     fn CGPreflightScreenCaptureAccess() -> bool;
     /// Requests screen recording permission by displaying the system modal prompt.
-    /// Note that this function returns immediately (it does not wait for the user’s response).
+    /// Note that this function returns immediately (it does not wait for the user's response).
     fn CGRequestScreenCaptureAccess() -> bool;
 }
 
 // Define nil as a null pointer
 #[cfg(target_os = "macos")]
-const nil: *mut Object = std::ptr::null_mut();
+const NIL: *mut Object = std::ptr::null_mut();
 
 // Global verbose setting that can be accessed by callback
 #[cfg(target_os = "macos")]
 static mut VERBOSE: bool = false;
+
+#[cfg(target_os = "macos")]
+#[cfg(feature = "modern_macos")]
+extern "C" {
+    static NSWorkspaceAuthorizationTypeScreenCapture: *const Object;
+}
 
 pub struct MacOSMonitor {
     verbose: bool,
@@ -75,22 +78,17 @@ impl MacOSMonitor {
     #[cfg(target_os = "macos")]
     fn request_screen_recording_permission() -> bool {
         unsafe {
-            if !CGPreflightScreenCaptureAccess() {
-                println!("Screen recording permission not yet granted. Requesting...");
-                // This call will display the system prompt. It returns immediately.
-                let granted = CGRequestScreenCaptureAccess();
-                if granted {
-                    println!(
-                        "Screen recording permission granted (note: a restart may be needed)."
-                    );
-                } else {
-                    println!("Screen recording permission denied.");
-                }
-                granted
-            } else {
+            if CGPreflightScreenCaptureAccess() {
                 println!("Screen recording permission already granted.");
-                true
+                return true;
             }
+
+            println!("Screen recording permission not yet granted. Requesting...");
+            CGRequestScreenCaptureAccess();
+            println!(
+                "Please grant permission in the System Settings dialog and restart the terminal."
+            );
+            false
         }
     }
 
@@ -100,33 +98,30 @@ impl MacOSMonitor {
         unsafe {
             VERBOSE = self.verbose;
         }
-
         let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
         let notification_center: *mut Object = msg_send![workspace, notificationCenter];
 
-        // The selector we'll use for the observer method
-        let sel = sel!(observeNotification:);
+        // Remove unused sel and observer variables since they're not being used
+        // let sel = sel!(observeNotification:);
+        // let observer: *mut Object = msg_send![class!(NSObject), new];
 
-        // Create a target for the notification
-        let observer: *mut Object = msg_send![class!(NSObject), new];
+        // Remove unused handle_notification function since we're using notification_handler
+        // extern "C" fn handle_notification(
+        //     _this: *mut Object,
+        //     _cmd: objc::runtime::Sel,
+        //     _: *mut Object,
+        // ) {
+        //     // Get the verbose flag
+        //     let verbose = unsafe { VERBOSE };
 
-        // Create an impl block to handle notifications
-        extern "C" fn handle_notification(
-            _this: *mut Object,
-            _cmd: objc::runtime::Sel,
-            notification: *mut Object,
-        ) {
-            // Get the verbose flag
-            let verbose = unsafe { VERBOSE };
-
-            // Handle the window information
-            if let Ok(Some(window_info)) = get_active_window_info() {
-                let _ = notifier::notify_qmk(&window_info, verbose);
-            }
-        }
+        //     // Handle the window information
+        //     if let Ok(Some(window_info)) = get_active_window_info() {
+        //         let _ = notifier::notify_qmk(&window_info, verbose);
+        //     }
+        // }
 
         // Register the method with the Objective-C runtime
-        let success: bool = unsafe {
+        let _: bool = unsafe {
             use objc::declare::ClassDecl;
             use objc::runtime::{Class, Object, Sel};
 
@@ -135,7 +130,7 @@ impl MacOSMonitor {
             let mut decl = ClassDecl::new("RustNotificationObserver", superclass).unwrap();
 
             // Add the notification handler method
-            extern "C" fn notification_handler(this: &Object, _: Sel, notification: *mut Object) {
+            extern "C" fn notification_handler(_: &Object, _: Sel, _: *mut Object) {
                 let verbose = unsafe { VERBOSE };
 
                 if let Ok(Some(window_info)) = get_active_window_info() {
@@ -143,12 +138,10 @@ impl MacOSMonitor {
                 }
             }
 
-            unsafe {
-                decl.add_method(
-                    sel!(observeNotification:),
-                    notification_handler as extern "C" fn(&Object, Sel, *mut Object),
-                );
-            }
+            decl.add_method(
+                sel!(observeNotification:),
+                notification_handler as extern "C" fn(&Object, Sel, *mut Object),
+            );
 
             // Register the class
             let _cls = decl.register();
@@ -162,7 +155,7 @@ impl MacOSMonitor {
                                 addObserver:observer
                                 selector:sel!(observeNotification:)
                                 name:NSWorkspaceDidActivateApplicationNotification
-                                object:nil];
+                                object:NIL];
 
             // Don't release the observer, we need it to stay alive
             let _ = observer;
@@ -172,9 +165,13 @@ impl MacOSMonitor {
 
         self.running = true;
 
-        // Immediately check the current active window
-        if let Ok(Some(window_info)) = get_active_window_info() {
-            let _ = notifier::notify_qmk(&window_info, self.verbose);
+        // Fix the unused Result warning
+        if let Ok(info) = get_active_window_info() {
+            if let Some(window_info) = info {
+                if let Err(e) = notifier::notify_qmk(&window_info, self.verbose) {
+                    eprintln!("Failed to notify QMK: {}", e);
+                }
+            }
         }
 
         // Set up the run loop
@@ -212,9 +209,11 @@ impl WindowMonitor for MacOSMonitor {
                 self.setup_observers()?;
 
                 // Capture the initial active application
-                get_active_window_info().map(|info| {
+                let _ = get_active_window_info().map(|info| {
                     if let Some(window_info) = info {
-                        let _ = notifier::notify_qmk(&window_info, self.verbose);
+                        if let Err(e) = notifier::notify_qmk(&window_info, self.verbose) {
+                            eprintln!("Failed to notify QMK: {}", e);
+                        }
                     }
                 });
 
@@ -233,9 +232,7 @@ impl WindowMonitor for MacOSMonitor {
         #[cfg(target_os = "macos")]
         {
             self.running = false;
-            unsafe {
-                CFRunLoop::get_current().stop();
-            }
+            CFRunLoop::get_current().stop();
         }
 
         Ok(())
@@ -271,38 +268,33 @@ fn get_active_window_info() -> Result<Option<WindowInfo>, Box<dyn Error>> {
             let info = window_array.get_values(range)[0] as CFDictionaryRef;
 
             // Use a raw dictionary without type parameters
-            let info_dict: CFDictionary<*const c_void, *const c_void> =
-                unsafe { CFDictionary::wrap_under_get_rule(info) };
+            let _: CFDictionary<*const c_void, *const c_void> =
+                CFDictionary::wrap_under_get_rule(info);
 
             // Get the owner name
-            let owner_name_ref = unsafe {
-                core_foundation::dictionary::CFDictionaryGetValue(
-                    info as CFDictionaryRef,
-                    kCGWindowOwnerName as *const _,
-                )
-            };
+            let owner_name_ref = core_foundation::dictionary::CFDictionaryGetValue(
+                info as CFDictionaryRef,
+                kCGWindowOwnerName as *const _,
+            );
 
             if owner_name_ref.is_null() {
                 continue;
             }
 
             // Convert the value to a CFString
-            let owner_name = unsafe { CFString::wrap_under_get_rule(owner_name_ref as *const _) };
+            let owner_name = CFString::wrap_under_get_rule(owner_name_ref as *const _);
             let owner_name_str = cfstring_to_string(&owner_name);
 
             if owner_name_str == app_name_str {
                 // Get the window name
-                let window_name_ref = unsafe {
-                    core_foundation::dictionary::CFDictionaryGetValue(
-                        info as CFDictionaryRef,
-                        kCGWindowName as *const _,
-                    )
-                };
+                let window_name_ref = core_foundation::dictionary::CFDictionaryGetValue(
+                    info as CFDictionaryRef,
+                    kCGWindowName as *const _,
+                );
 
                 if !window_name_ref.is_null() {
                     // Convert the value to a CFString
-                    let window_name =
-                        unsafe { CFString::wrap_under_get_rule(window_name_ref as *const _) };
+                    let window_name = CFString::wrap_under_get_rule(window_name_ref as *const _);
                     window_title = cfstring_to_string(&window_name);
                 }
 
