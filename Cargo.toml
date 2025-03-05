@@ -30,6 +30,7 @@ dispatch = { version = "0.2", optional = true }
 [features]
 default = ["hyprland",  "macos"]
 hyprland = ["dep:hyprland"]
+gnome = ["dep:zbus"]
 macos = ["dep:objc", "dep:core-foundation", "dep:core-graphics", "dep:dispatch"]
 
 [[bin]]
