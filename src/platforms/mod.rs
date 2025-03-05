@@ -1,7 +1,5 @@
-mod gnome;
 mod hyprland;
 mod macos;
-mod windows;
 mod x11;
 
 use std::error::Error;
@@ -18,11 +16,6 @@ pub fn create_monitor(verbose: bool) -> Result<Box<dyn WindowMonitor>, Box<dyn E
     #[cfg(target_os = "macos")]
     {
         return Ok(Box::new(macos::MacOSMonitor::new(verbose)));
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        return Ok(Box::new(windows::WindowsMonitor::new(verbose)));
     }
 
     #[cfg(all(target_os = "linux", feature = "hyprland"))]
